@@ -1,3 +1,3 @@
 # Battery-charger
- Gestion charge des batterie Lithium
+ Gestion de la charge des batteries Lithium
  
