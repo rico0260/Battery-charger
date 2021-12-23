@@ -19,7 +19,11 @@
 
 TFT_eSPI tft = TFT_eSPI();  // Invoke library, pins defined in User_Setup.h
 
-#include "GRTgaz_orange_2.h" 
+#include "Rico0260_ChargeLevel.h"
+//#include "GRTgaz_orange_2.h" 
+#include "GRTgaz_4c_orange.h"
+
+Rico0260_ChargeLevel niveauCB;
 
 SDL_Arduino_INA3221 ina3221_1(0x40);
 SDL_Arduino_INA3221 ina3221_2(0x41);
@@ -34,7 +38,7 @@ SDL_Arduino_INA3221 ina3221_3(0x42);
 const int pinRelais[] = {14, 27, 26, 25, 33, 32, 12, 13};
 const int col1 = 16; //8x2
 const int col2 = 64; //8x8
-const int col3 = 120; //15x8
+const int col3 = 120; //15x8 //Power ou Pourcentage
 const int col4 = 184; //23x8
 const int col5 = 258; //32x8
 const int ligne[] = {20, 36, 52, 68, 84, 100, 116, 132};
@@ -42,11 +46,9 @@ const int ligne[] = {20, 36, 52, 68, 84, 100, 116, 132};
 unsigned long currentMillis;
 unsigned long AffichageMillis = 0;
 unsigned long MesuresMillis = 0;
-//Calcul % de charge tension de seuil de bas niveau 3.2V
-//const float tTension[] = {3.0, 3.3, 3.6, 3.7, 3.75, 3.79, 3.83, 3.87, 3.92, 3.97, 4.1, 4.2};
-//const int tCharge[] = {0, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100};
-const float TensionMin = 3.2; //tension min
-const float TensionMax = 4.2; //tension max
+
+//const float TensionMin = 3.2; //tension min
+//const float TensionMax = 4.2; //tension max
 
 // structure d'une voie
 struct stVoie {
@@ -57,10 +59,18 @@ struct stVoie {
   float power_mW;
   float energy_mAh;
   float Tps;
-  float pCharge;
+  int ptCharge;
 };
 struct stVoie Voies[8];
 
+//Gestion du rétroéclérage
+//const int pwmFreq = 5000; //La frequence
+//const int pwmResolution = 8; //La résolution
+//const int pwmLedChannelTFT = 0; //Le canal
+//int backlight[5] = {10,30,60,120,220};
+//byte b=1;
+
+//Gestion du bouton départ charge
 const int pinBouton = 0;
 boolean buttonOK = false;
 
@@ -80,8 +90,10 @@ unsigned int posY = 60;
   //tft.setTextSize(1);
   //tft.fillScreen(TFT_BLACK);
   
-  tft.drawXBitmap(margeX, posY-(logoHeight/2), logo, logoWidth, logoHeight, TFT_ORANGE);
-  //tft.drawXBitmap(0, 0, logo, logoWidth, logoHeight, TFT_WHITE);
+  //tft.drawXBitmap(margeX, posY-(logoHeight/2), logo, logoWidth, logoHeight, TFT_ORANGE);
+  ////tft.drawXBitmap(0, 0, logo, logoWidth, logoHeight, TFT_WHITE);
+  //tft.setSwapBytes(true);
+  tft.pushImage(0, 0, 165, 100, GRTgaz_4c_orange); // image GRTgaz_4c_orange
   
   tft.setTextColor(TFT_RED, TFT_BLACK);
   tft.drawCentreString("Chargeur", margeX+logoWidth+margeX+50, 90, 4);
@@ -116,17 +128,20 @@ void setup(void) {
   ina3221_2.begin();
   ina3221_3.begin();
    
+  //Gestion de l'écran
   tft.init();
   tft.setRotation(1);
-
   tft.fillScreen(TFT_BLACK);
+  //---- digitalWrite(TFT_BL, LOW); //Allumer
+  //ledcSetup(pwmLedChannelTFT, pwmFreq, pwmResolution);
+  //ledcAttachPin(TFT_BL, pwmLedChannelTFT);
+  //ledcWrite(pwmLedChannelTFT, backlight[b]);
+  
   HelloWorld();
   delay(3000);
   tft.setTextSize(1);
   tft.fillScreen(TFT_BLACK);
-  
-  //digitalWrite(TFT_BL, LOW); //Allumer
-  
+
 }
 
 //***********************************************************************
@@ -164,32 +179,25 @@ float loadvoltage = 0;
       break;
   }
   
+  //----- Tension de la batterie
   Voies[voie-1].busvoltage = busvoltage;
-  //Calcul du pourcentage de charge
-  /*Voies[voie-1].pCharge = 100;
-  for (int i=1, i<12, i++) {
-    if (Voies[voie-1].busvoltage <= tTension(i)) {
-      Voies[voie-1].pCharge = tCharge(i-1)
-      break;
-    }
-  }*/
-  Voies[voie-1].pCharge = ((Voies[voie-1].busvoltage - TensionMin) / (TensionMax - TensionMin)) * 100; //mettre en pourcentage
-  if (Voies[voie-1].pCharge > 100) Voies[voie-1].pCharge = 100; //max is 100%
-  else if (Voies[voie-1].pCharge < 0) Voies[voie-1].pCharge = 0; //min is 0%
-  //Shunt
+  //---- Shunt
   Voies[voie-1].shuntvoltage = shuntvoltage;
   Voies[voie-1].current_mA = current_mA;
   Voies[voie-1].loadvoltage = loadvoltage;
-  //Power
+  //----- Power
   Voies[voie-1].power_mW = Voies[voie-1].loadvoltage * Voies[voie-1].current_mA;
   if (Voies[voie-1].power_mW < 0) Voies[voie-1].power_mW = 0;
   //Voies[voie-1].energy_mAh = Voies[voie-1].energy_mAh + Voies[voie-1].current_mA * (TpsIntSec / 3600);
   Voies[voie-1].energy_mAh = Voies[voie-1].energy_mAh + Voies[voie-1].current_mA / 36000;
-  //
+  //----- Pourcentage de la capacité charge (Calcul du pourcentage de charge)
+	Voies[voie-1].ptCharge = niveauCB.getChargeLevel_18650( Voies[voie-1].loadvoltage );
+  //----- Temps total de charge
   //Voies[voie-1].Tps = Voies[voie-1].Tps + TpsIntSec;
   //if (Voies[voie-1].current_mA > 0) Voies[voie-1].Tps = Voies[voie-1].Tps + TpsIntSec;
   if (Voies[voie-1].current_mA > 0) Voies[voie-1].Tps = Voies[voie-1].Tps + 0.1;
-  
+	
+	//----- Gestion de la charge en fonction de seuils
   if (current_mA < 2 and buttonOK == false) {
     digitalWrite(pinRelais[voie-1], HIGH);
   }
@@ -222,34 +230,36 @@ void AfficheVoie(int voie) {
     //loadvoltage
     tft.drawFloat(Voies[voie-1].loadvoltage, 2, col1, ligne[voie-1], 2);
     tft.drawChar('V', col1+30, ligne[voie-1], 2);
-    //current_mA
+    //---- current_mA
     //tft.drawString(dtostrf(loadvoltage,2,2,tmp), 100, 200, 6);
     //tft.drawFloat(Voies[voie-1].current_mA, 0, col2, ligne[voie-1], 2);
     //tft.drawString("mA",col2+45, ligne[voie-1], 2);
     //tft.drawString("9999", col2, ligne[voie-1], 2);
     tft.drawNumber(Voies[voie-1].current_mA, col2, ligne[voie-1], 2);
     tft.drawString("mA",col2+32, ligne[voie-1], 2);
-    //power_mW
+    //---- power_mW 
     //tft.drawFloat(Voies[voie-1].power_mW, 1, col3, ligne[voie-1], 2);
     //tft.drawString("9999", col3, ligne[voie-1], 2);
     //tft.drawNumber(Voies[voie-1].power_mW, col3, ligne[voie-1], 2);
     //tft.drawString("mW",col3+32, ligne[voie-1], 2);
-    //pourcentage
+    tft.drawNumber(Voies[voie-1].ptCharge, col3, ligne[voie-1], 2);
+    tft.drawString("%",col3+32, ligne[voie-1], 2);
+    //---- pourcentage %
     tft.drawNumber(Voies[voie-1].pCharge, col3, ligne[voie-1], 2);
     tft.drawString("%",col3+24, ligne[voie-1], 2);
-    //energy_mAh
+    //---- energy_mAh
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
     //tft.drawFloat(Voies[voie-1].energy_mAh, 0, col4, ligne[voie-1], 2);
     //tft.drawString("99999", col4, ligne[voie-1], 2);
     tft.drawNumber(Voies[voie-1].energy_mAh, col4, ligne[voie-1], 2);
     tft.drawString("mAh",col4+40, ligne[voie-1], 2);
-    //Tps (minutes)
+    //---- Tps (minutes)
     //tft.setTextColor(TFT_BLUE, TFT_BLACK);
     //tft.drawString("9999", col5, ligne[voie-1], 2);
     tft.drawNumber(Voies[voie-1].Tps/60, col5, ligne[voie-1], 2);
     tft.drawString("min",col5+40, ligne[voie-1], 2);
 
-    //Baterie chargée
+    //---- Baterie chargée
     if (Voies[voie-1].loadvoltage>4.15 and Voies[voie-1].current_mA<2 and buttonOK == false) {
        digitalWrite(pinRelais[voie-1], HIGH); // ouvrir le relais
       //tft.setTextColor(TFT_GREEN, TFT_BLACK);
@@ -288,6 +298,23 @@ void AfficheMesures(void) {
 }
 
 //***********************************************************************
+// Affichage la jauge d'une voie
+//***********************************************************************
+void AfficheVoie(int voie) {
+
+}
+
+//***********************************************************************
+// Affichage les jauges sur une page
+//***********************************************************************
+void AfficheJauges(void) {
+  
+  //Affichage des mesures des voies
+  for (int i = 1; i <= 8; i++) AfficheJauge(i);
+
+}
+
+//***********************************************************************
 // Main loop
 //***********************************************************************
 void loop() {
@@ -307,8 +334,9 @@ void loop() {
     AffichageMillis = currentMillis;
     switch (pageNum) {
       case 0:
-        pageNumPrev = pageNum;
+        if (pageNumPrev != pageNum) { pageNumPrev = pageNum; }
         AfficheMesures();
+        AfficheJauges();
         break;
       case 1:
         if (pageNumPrev != pageNum) {
@@ -316,7 +344,7 @@ void loop() {
           HelloWorld(); //Affiche page démarrage
         }
         break;
-      case 2:
+      /*case 2:
         if (pageNumPrev != pageNum) {
           pageNumPrev = pageNum;
           analogMeter(); // Draw analogue Meter
@@ -324,28 +352,30 @@ void loop() {
         plotNeedle(443,0); // trace l'aiguille
         //plotNeedle(Voies[0].current_mA,0); // trace l'aiguille
         //Serial.println(millis()-t); // Print time taken for meter update
-        break;
-      case 3:
+        break;*/
+      /*case 3:
         if (pageNumPrev != pageNum) {
           pageNumPrev = pageNum;
           //plotPointer(); // Draw Linear Meter
         }
-        break;
+        break;*/
     }    
   }
   
   //Etat du bouton
   if (digitalRead(pinBouton)==LOW) {
     buttonOK = true;
-    tft.drawString("ON  ", 0, 224, 2); //->240-16
+    //tft.drawString("ON  ", 0, 224, 2); //->240-16
+		pageNum = 1; //HelloWorld();
   }
   else if (buttonOK == true){
     buttonOK = false;
-    tft.drawString("OFF ", 0, 224, 2); //->240-16
+		pageNum = 0; 
+    //tft.drawString("OFF ", 0, 224, 2); //->240-16
     // Changement de page
-    pageNum = pageNum + 1;
-    if (pageNum > 2) pageNum = 0;
-    //tft.fillScreen(TFT_BLACK);
+    //pageNum = pageNum + 1;
+    //if (pageNum > 2) pageNum = 0;
+    ////tft.fillScreen(TFT_BLACK);
   }
 
 }
