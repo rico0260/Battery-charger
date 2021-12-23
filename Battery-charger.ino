@@ -38,7 +38,8 @@ SDL_Arduino_INA3221 ina3221_3(0x42);
 const int pinRelais[] = {14, 27, 26, 25, 33, 32, 12, 13};
 const int col1 = 16; //8x2
 const int col2 = 64; //8x8
-const int col3 = 120; //15x8 //Power ou Pourcentage
+//const int col3 = 120; //15x8 //Power 
+const int col3 = 128; //16x8 //Pourcentage
 const int col4 = 184; //23x8
 const int col5 = 258; //32x8
 const int ligne[] = {20, 36, 52, 68, 84, 100, 116, 132};
@@ -64,11 +65,11 @@ struct stVoie {
 struct stVoie Voies[8];
 
 //Gestion du rétroéclérage
-//const int pwmFreq = 5000; //La frequence
-//const int pwmResolution = 8; //La résolution
-//const int pwmLedChannelTFT = 0; //Le canal
-//int backlight[5] = {10,30,60,120,220};
-//byte b=1;
+const int pwmFreq = 5000; //La frequence
+const int pwmResolution = 8; //La résolution
+const int pwmLedChannelTFT = 0; //Le canal
+int backlight[5] = {10,30,60,120,220};
+byte b=1;
 
 //Gestion du bouton départ charge
 const int pinBouton = 0;
@@ -92,8 +93,10 @@ unsigned int posY = 60;
   
   //tft.drawXBitmap(margeX, posY-(logoHeight/2), logo, logoWidth, logoHeight, TFT_ORANGE);
   ////tft.drawXBitmap(0, 0, logo, logoWidth, logoHeight, TFT_WHITE);
-  //tft.setSwapBytes(true);
-  tft.pushImage(0, 0, 165, 100, GRTgaz_4c_orange); // image GRTgaz_4c_orange
+  //tft.drawBitmap(margeX, posY-(logoHeight/2), GRTgaz_4c_orange, logoWidth, logoHeight, TFT_WHITE);
+  tft.setSwapBytes(true); // Swap the byte order for pushImage() - corrects endianness
+  tft.pushImage(margeX, posY-(logoHeight/2), 165, 100, GRTgaz_4c_orange); // image GRTgaz_4c_orange
+  //tft.pushImage(margeX, posY-(logoHeight/2), 165, 77, GRTgaz);
   
   tft.setTextColor(TFT_RED, TFT_BLACK);
   tft.drawCentreString("Chargeur", margeX+logoWidth+margeX+50, 90, 4);
@@ -102,7 +105,7 @@ unsigned int posY = 60;
   tft.drawCentreString("lithium", margeX+logoWidth+margeX+50, 154, 4);
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   //tft.drawCentreString("IP: " + IP, 20+logoWidth+20+60, 94, 2); 
-  tft.drawString("version : 1.01", 0, 224, 2); //->240-16
+  tft.drawString("version : 1.02", 0, 224, 2); //->240-16
 
 }
 
@@ -133,9 +136,9 @@ void setup(void) {
   tft.setRotation(1);
   tft.fillScreen(TFT_BLACK);
   //---- digitalWrite(TFT_BL, LOW); //Allumer
-  //ledcSetup(pwmLedChannelTFT, pwmFreq, pwmResolution);
-  //ledcAttachPin(TFT_BL, pwmLedChannelTFT);
-  //ledcWrite(pwmLedChannelTFT, backlight[b]);
+  ledcSetup(pwmLedChannelTFT, pwmFreq, pwmResolution);
+  ledcAttachPin(TFT_BL, pwmLedChannelTFT);
+  ledcWrite(pwmLedChannelTFT, backlight[b]);
   
   HelloWorld();
   delay(3000);
@@ -245,7 +248,7 @@ void AfficheVoie(int voie) {
     tft.drawNumber(Voies[voie-1].ptCharge, col3, ligne[voie-1], 2);
     tft.drawString("%",col3+32, ligne[voie-1], 2);
     //---- pourcentage %
-    tft.drawNumber(Voies[voie-1].pCharge, col3, ligne[voie-1], 2);
+    tft.drawNumber(Voies[voie-1].ptCharge, col3, ligne[voie-1], 2);
     tft.drawString("%",col3+24, ligne[voie-1], 2);
     //---- energy_mAh
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
@@ -286,9 +289,9 @@ void AfficheMesures(void) {
   //tft.drawString("Ubat", col1, 0, 2);
   //tft.drawString("I", col2, 0, 2);
   tft.drawString("U (V)", col1, 0, 2);
-  tft.drawString("I (mA)", col3, 0, 2);
+  tft.drawString("I (mA)", col2, 0, 2);
   //tft.drawString("P (mW)", col3, 0, 2);
-  tft.drawString("%", col3, 0, 2);
+  tft.drawString("(%)", col3, 0, 2);
   tft.drawString("(mAh)", col4, 0, 2);
   tft.drawString("T (min)", col5, 0, 2);
 
@@ -300,7 +303,7 @@ void AfficheMesures(void) {
 //***********************************************************************
 // Affichage la jauge d'une voie
 //***********************************************************************
-void AfficheVoie(int voie) {
+void AfficheJauge(int voie) {
 
 }
 
