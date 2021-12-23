@@ -94,7 +94,6 @@ unsigned int posY = 60;
   //tft.drawXBitmap(margeX, posY-(logoHeight/2), logo, logoWidth, logoHeight, TFT_ORANGE);
   ////tft.drawXBitmap(0, 0, logo, logoWidth, logoHeight, TFT_WHITE);
   //tft.drawBitmap(margeX, posY-(logoHeight/2), GRTgaz_4c_orange, logoWidth, logoHeight, TFT_WHITE);
-  tft.setSwapBytes(true); // Swap the byte order for pushImage() - corrects endianness
   tft.pushImage(margeX, posY-(logoHeight/2), 165, 100, GRTgaz_4c_orange); // image GRTgaz_4c_orange
   //tft.pushImage(margeX, posY-(logoHeight/2), 165, 77, GRTgaz);
   
@@ -133,12 +132,18 @@ void setup(void) {
    
   //Gestion de l'écran
   tft.init();
+  tft.setSwapBytes(true); // Swap the byte order for pushImage() - corrects endianness
   tft.setRotation(1);
   tft.fillScreen(TFT_BLACK);
+  
   //---- digitalWrite(TFT_BL, LOW); //Allumer
+  //****************************
+  //puissance du rétroéclairage
+  //maxi 16 canaux PWM
   ledcSetup(pwmLedChannelTFT, pwmFreq, pwmResolution);
   ledcAttachPin(TFT_BL, pwmLedChannelTFT);
   ledcWrite(pwmLedChannelTFT, backlight[b]);
+  //****************************
   
   HelloWorld();
   delay(3000);
