@@ -3,8 +3,8 @@
 * 
 *  Auteur : Eric HANACEK
 *     2021-11-18
+*     Modification: 2022-02-04
 *     
-* Ecran : TFT ST7735, 128x160
 * Ecran : TFT ILI9341, 240x320
 * Relais : 8
 * INA : 3 x INA3221
@@ -19,29 +19,26 @@
 
 TFT_eSPI tft = TFT_eSPI();  // Invoke library, pins defined in User_Setup.h
 
+setup_t user;
+
 #include "Rico0260_ChargeLevel.h"
-//#include "GRTgaz_orange_2.h" 
-#include "GRTgaz_4c_orange.h"
+#include "includes/GRTgaz_orange_2.h" 
 
 Rico0260_ChargeLevel niveauCB;
 
 SDL_Arduino_INA3221 ina3221_1(0x40);
 SDL_Arduino_INA3221 ina3221_2(0x41);
 SDL_Arduino_INA3221 ina3221_3(0x42);
-//#define CHANNEL_1 1
-//#define CHANNEL_2 2
-//#define CHANNEL_3 3
-//const int CHANNEL[] = {1, 2, 3};
 
 // Déclaration et initialisation des GPIO pour les relais
 //const int pinRelais[] = {13, 12, 32, 33, 25, 26, 27, 14};
 const int pinRelais[] = {14, 27, 26, 25, 33, 32, 12, 13};
-const int col1 = 16; //8x2
-const int col2 = 64; //8x8
-//const int col3 = 120; //15x8 //Power 
-const int col3 = 128; //16x8 //Pourcentage
-const int col4 = 184; //23x8
-const int col5 = 258; //32x8
+const int col1 = 16; //2x8 pixels
+const int col2 = 64; //8x8 pixels
+//const int col3 = 120; //15x8 pixels //Power 
+const int col3 = 128; //16x8 pixels //Pourcentage
+const int col4 = 184; //23x8 pixels
+const int col5 = 258; //32x8 pixels
 const int ligne[] = {20, 36, 52, 68, 84, 100, 116, 132};
 // Calculs energie
 unsigned long currentMillis;
@@ -64,13 +61,6 @@ struct stVoie {
 };
 struct stVoie Voies[8];
 
-//Gestion du rétroéclérage
-const int pwmFreq = 5000; //La frequence
-const int pwmResolution = 8; //La résolution
-const int pwmLedChannelTFT = 0; //Le canal
-int backlight[5] = {10,30,60,120,220};
-byte b=1;
-
 //Gestion du bouton départ charge
 const int pinBouton = 0;
 boolean buttonOK = false;
@@ -86,25 +76,55 @@ int pageNumPrev = 0;
 //***********************************************************************
 void HelloWorld(void) {
 unsigned int margeX = 10;
-unsigned int posY = 60;
+unsigned int posY = 50;
 
   //tft.setTextSize(1);
-  //tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(TFT_BLACK);
+
+  tft.getSetup(user);
   
-  //tft.drawXBitmap(margeX, posY-(logoHeight/2), logo, logoWidth, logoHeight, TFT_ORANGE);
-  ////tft.drawXBitmap(0, 0, logo, logoWidth, logoHeight, TFT_WHITE);
-  //tft.drawBitmap(margeX, posY-(logoHeight/2), GRTgaz_4c_orange, logoWidth, logoHeight, TFT_WHITE);
-  tft.pushImage(margeX, posY-(logoHeight/2), 165, 100, GRTgaz_4c_orange); // image GRTgaz_4c_orange
-  //tft.pushImage(margeX, posY-(logoHeight/2), 165, 77, GRTgaz);
-  
+  tft.drawXBitmap(margeX, posY-(logoHeight/2), logo, logoWidth, logoHeight, TFT_ORANGE);
+
   tft.setTextColor(TFT_RED, TFT_BLACK);
-  tft.drawCentreString("Chargeur", margeX+logoWidth+margeX+50, 90, 4);
+  tft.drawCentreString("Chargeur", margeX+logoWidth+margeX+50, 80, 4);
   tft.setTextColor(TFT_GREEN, TFT_BLACK);
-  tft.drawCentreString("batteries", margeX+logoWidth+margeX+50, 122, 4);
-  tft.drawCentreString("lithium", margeX+logoWidth+margeX+50, 154, 4);
+  tft.drawCentreString("batteries", margeX+logoWidth+margeX+50, 112, 4);
+  tft.drawCentreString("lithium", margeX+logoWidth+margeX+50, 144, 4);
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   //tft.drawCentreString("IP: " + IP, 20+logoWidth+20+60, 94, 2); 
   tft.drawString("version : 1.02", 0, 224, 2); //->240-16
+
+  tft.setTextColor(TFT_BLUE, TFT_BLACK);
+  tft.setCursor(0, 95, 2);
+  tft.print("Processor : ");
+  if ( user.esp == 0x8266) tft.println("ESP8266");
+  if ( user.esp == 0x32)   tft.println("ESP32");
+  if ( user.esp == 0x32F)  tft.println("STM32");
+  if ( user.esp == 0x2040) tft.println("RP2040");
+  if ( user.esp == 0x0000) tft.println("Generic");
+  #ifdef ESP8266 //si ESP8266
+    tft.print("VCC : ");
+    tft.println(ESP.getVcc()); 
+  #endif
+  #if defined (ESP32) || defined (ESP8266)
+    tft.print("CPU : "); 
+    tft.print(ESP.getCpuFreqMHz()); 
+    tft.println("MHz");
+    //
+    tft.print("MAC : "); 
+    tft.println(ESP.getEfuseMac(), HEX); 
+  #endif
+  if (user.tft_driver != 0xE9D) // For ePaper displays the size is defined in the sketch
+  {
+    tft.print("Display driver : "); 
+    tft.println(user.tft_driver, HEX); 
+    tft.print("Width : "); 
+    tft.println(user.tft_width); 
+    tft.print("Height : "); 
+    tft.println(user.tft_height); 
+  }
+  if (user.serial==1)        { tft.print("Display SPI frequency = "); tft.print(user.tft_spi_freq/10.0); tft.println("MHz");}
+  if (user.pin_tch_cs != -1) { tft.print("Touch SPI frequency   = "); tft.print(user.tch_spi_freq/10.0); tft.println("MHz");}  
 
 }
 
@@ -112,14 +132,10 @@ unsigned int posY = 60;
 // setup
 //***********************************************************************
 void setup(void) {
-//uint64_t chipid;
 
-  //chipid = ESP.getEfuseMac(); //The chip ID is essentially its MAC address(length: 6 bytes).
-  //ssid += String(chipid, HEX);
-  
   //Serial.begin(115200);
-  //Serial.print("Chargeur de batteries lithium");
-  
+  //Serial.println("Chargeur de batteries lithium");
+
   for (int i=0; i<8; i++){
     pinMode(pinRelais[i], OUTPUT);    // Toutes les pins sont commutées en OUT
     digitalWrite(pinRelais[i], HIGH); // Toutes les pins prennent pour valeur HIGH
@@ -134,16 +150,6 @@ void setup(void) {
   tft.init();
   tft.setSwapBytes(true); // Swap the byte order for pushImage() - corrects endianness
   tft.setRotation(1);
-  tft.fillScreen(TFT_BLACK);
-  
-  //---- digitalWrite(TFT_BL, LOW); //Allumer
-  //****************************
-  //puissance du rétroéclairage
-  //maxi 16 canaux PWM
-  ledcSetup(pwmLedChannelTFT, pwmFreq, pwmResolution);
-  ledcAttachPin(TFT_BL, pwmLedChannelTFT);
-  ledcWrite(pwmLedChannelTFT, backlight[b]);
-  //****************************
   
   HelloWorld();
   delay(3000);
@@ -250,8 +256,6 @@ void AfficheVoie(int voie) {
     //tft.drawString("9999", col3, ligne[voie-1], 2);
     //tft.drawNumber(Voies[voie-1].power_mW, col3, ligne[voie-1], 2);
     //tft.drawString("mW",col3+32, ligne[voie-1], 2);
-    tft.drawNumber(Voies[voie-1].ptCharge, col3, ligne[voie-1], 2);
-    tft.drawString("%",col3+32, ligne[voie-1], 2);
     //---- pourcentage %
     tft.drawNumber(Voies[voie-1].ptCharge, col3, ligne[voie-1], 2);
     tft.drawString("%",col3+24, ligne[voie-1], 2);
@@ -342,11 +346,15 @@ void loop() {
     AffichageMillis = currentMillis;
     switch (pageNum) {
       case 0:
-        if (pageNumPrev != pageNum) { pageNumPrev = pageNum; }
+        if (pageNumPrev != pageNum) { 
+          pageNumPrev = pageNum;
+          tft.fillScreen(TFT_BLACK);
+        }
         AfficheMesures();
-        AfficheJauges();
+        //AfficheJauges();
         break;
       case 1:
+        //Afficher une fois donc pas de rafraichissement
         if (pageNumPrev != pageNum) {
           pageNumPrev = pageNum;
           HelloWorld(); //Affiche page démarrage
@@ -354,7 +362,7 @@ void loop() {
         break;
       /*case 2:
         if (pageNumPrev != pageNum) {
-          pageNumPrev = pageNum;
+          pageNumPrev = pageNum; }
           analogMeter(); // Draw analogue Meter
         }
         plotNeedle(443,0); // trace l'aiguille
