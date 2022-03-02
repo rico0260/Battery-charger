@@ -3,8 +3,9 @@
 * 
 *  Auteur : Eric HANACEK
 *     2021-11-18
-*     Modification: 2022-01-04
+*     Modification: 2022-03-02
 *     
+* Microcontroleur : ESP32_Devkitc_V4
 * Ecran : TFT ILI9341, 240x320
 * Relais : 8
 * INA : 3 x INA3221
@@ -50,14 +51,14 @@ unsigned long MesuresMillis = 0;
 
 // structure d'une voie
 struct stVoie {
-  float shuntvoltage;
-  float busvoltage;
-  float current_mA;
+  float shuntvoltage; //Tension sur le shunt
+  float busvoltage; //Tension de la batterie
+  float current_mA; //Intensité dans le shunt
   float loadvoltage;
-  float power_mW;
-  float energy_mAh;
-  float Tps;
-  int ptCharge;
+  float power_mW; //Puissance utilisée en court
+  float energy_mAh; //Energie stockée
+  float Tps; //Temps total de charge
+  int ptCharge; //Pourcentage de la capacité charge
 };
 struct stVoie Voies[8];
 
@@ -92,7 +93,7 @@ unsigned int posY = 50;
   tft.drawCentreString("lithium", margeX+logoWidth+margeX+50, 144, 4);
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   //tft.drawCentreString("IP: " + IP, 20+logoWidth+20+60, 94, 2); 
-  tft.drawString("version : 1.02", 0, 224, 2); //->240-16
+  tft.drawString("version : 1.03", 0, 224, 2); //->240-16
 
   tft.setTextColor(TFT_BLUE, TFT_BLACK);
   tft.setCursor(0, 95, 2);
@@ -111,8 +112,8 @@ unsigned int posY = 50;
     tft.print(ESP.getCpuFreqMHz()); 
     tft.println("MHz");
     //
-    tft.print("MAC : "); 
-    tft.println(ESP.getEfuseMac(), HEX); 
+    //tft.print("MAC : "); 
+    //tft.println(ESP.getEfuseMac(), HEX); 
   #endif
   if (user.tft_driver != 0xE9D) // For ePaper displays the size is defined in the sketch
   {
@@ -212,10 +213,15 @@ float loadvoltage = 0;
   if (Voies[voie-1].current_mA > 0) Voies[voie-1].Tps = Voies[voie-1].Tps + 0.1;
 	
 	//----- Gestion de la charge en fonction de seuils
-  if (current_mA < 2 and buttonOK == false) {
+  if (current_mA < 20 and buttonOK == false) {
     digitalWrite(pinRelais[voie-1], HIGH);
   }
   else if (loadvoltage >= 3.0 and buttonOK == true) {
+    if (current_mA < 10 ) {
+      Voies[voie-1].energy_mAh = 0.0;
+      Voies[voie-1].Tps = 0.0;
+      Voies[voie-1].Tps = 0;
+    }
     digitalWrite(pinRelais[voie-1], LOW);
   }
   
@@ -233,13 +239,41 @@ void AfficheVoie(int voie) {
   //Pas de batterie ou batterie HS
   if (Voies[voie-1].loadvoltage<3.0) {
     digitalWrite(pinRelais[voie-1], HIGH); // ouvrir le relais
-    tft.setTextColor(TFT_RED, TFT_BLACK);
+    tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
     //tft.drawString("Pas de batterie ou batterie HS                   ", col1, ligne[voie-1], 2);
     tft.drawString("Batterie inexistante ou profondement dechargee   ", col1, ligne[voie-1], 2);
   }
   //Chargement batterie mise en page '8 par caratères', '6 pour le .'
   else {
-    tft.setTextColor(TFT_ORANGE, TFT_BLACK);
+    //---- Baterie chargée
+    if (Voies[voie-1].loadvoltage>4.15 and Voies[voie-1].current_mA<2 and buttonOK == false) {
+       digitalWrite(pinRelais[voie-1], HIGH); // ouvrir le relais
+      //tft.setTextColor(TFT_GREEN, TFT_BLACK);
+      //tft.drawString("Batterie Ok                ", col1, ligne[voie-1], 2);
+      //tft.drawString("Batterie complete          ", col1, ligne[voie-1], 2);
+      //tft.drawString("Batterie Ok                                      ", col1, ligne[voie-1], 2);
+      //tft.drawString("Batterie complète                                ", col1, ligne[voie-1], 2);
+      //tft.drawFloat(Voies[voie-1].energy_mAh, 0, col4, ligne[voie-1], 2);
+      //tft.drawNumber(Voies[voie-1].energy_mAh, col4, ligne[voie-1], 2);
+      //tft.drawString("mAh",col4+45, ligne[voie-1], 2);
+    } 
+
+    //Coloration du texte 
+    if (Voies[voie-1].loadvoltage>4.15 and Voies[voie-1].current_mA<10) {
+      //batterie chargée
+      tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    }
+    else {
+      if (Voies[voie-1].loadvoltage<2.9) {
+        //Pas de batterie ou problème batterie 
+        tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+      }
+      else {
+        //Batterie en chatge
+        tft.setTextColor(TFT_RED, TFT_BLACK);
+      }
+    }
+
     tft.drawString("                                                   ", col1, ligne[voie-1], 2);
     //loadvoltage
     tft.drawFloat(Voies[voie-1].loadvoltage, 2, col1, ligne[voie-1], 2);
@@ -271,18 +305,6 @@ void AfficheVoie(int voie) {
     tft.drawNumber(Voies[voie-1].Tps/60, col5, ligne[voie-1], 2);
     tft.drawString("min",col5+40, ligne[voie-1], 2);
 
-    //---- Baterie chargée
-    if (Voies[voie-1].loadvoltage>4.15 and Voies[voie-1].current_mA<2 and buttonOK == false) {
-       digitalWrite(pinRelais[voie-1], HIGH); // ouvrir le relais
-      //tft.setTextColor(TFT_GREEN, TFT_BLACK);
-      //tft.drawString("Batterie Ok                ", col1, ligne[voie-1], 2);
-      //tft.drawString("Batterie complete          ", col1, ligne[voie-1], 2);
-      //tft.drawString("Batterie Ok                                      ", col1, ligne[voie-1], 2);
-      //tft.drawString("Batterie complète                                ", col1, ligne[voie-1], 2);
-      //tft.drawFloat(Voies[voie-1].energy_mAh, 0, col4, ligne[voie-1], 2);
-      //tft.drawNumber(Voies[voie-1].energy_mAh, col4, ligne[voie-1], 2);
-      //tft.drawString("mAh",col4+45, ligne[voie-1], 2);
-    } 
   }
   
 }
@@ -307,6 +329,23 @@ void AfficheMesures(void) {
   //Affichage des mesures des voies
   for (int i = 1; i <= 8; i++) AfficheVoie(i);
 
+  //Information
+  tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+  //tft.drawString("N'oubliez pas de lancer le processus de charge", 10, 150, 2);
+  tft.drawCentreString("N'oubliez pas de lancer le processus de charge", 160, 170, 2);
+  //tft.drawString("En charge: Rouge", 20, 190, 2);
+  //tft.drawString("Charge OK: Vert", 20, 210, 2);
+  tft.setCursor(20, 190, 2);
+  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  tft.print("En charge : ");
+  tft.setTextColor(TFT_RED, TFT_BLACK);
+  tft.println("Rouge");
+  tft.setCursor(20, 210, 2);
+  tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+  tft.print("Charge OK : ");
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  tft.println("Vert");
+  
 }
 
 //***********************************************************************
