@@ -3,7 +3,7 @@
 * 
 *  Auteur : Eric HANACEK
 *     2021-11-18
-*     Modification: 2022-03-02
+*     Modification: 2022-03-16
 *     
 * Microcontroleur : ESP32_Devkitc_V4
 * Ecran : TFT ILI9341, 240x320
@@ -12,7 +12,7 @@
 * 
 ***********************************
 */
-#include <TFT_eSPI.h> // Graphics and font library for driver chip
+#include <TFT_eSPI.h> // Graphics and font library for driver chip$
 #include <SPI.h>
 
 #include <Wire.h>
@@ -65,12 +65,13 @@ struct stVoie Voies[8];
 //Gestion du bouton départ charge
 const int pinBouton = 0;
 boolean buttonOK = false;
+int etat_bouton = 0;
 
 unsigned long currentTime = millis(); // Current time
 
 //Gestion des pages
-int pageNum = 0;
-int pageNumPrev = 0;
+//int pageNum = 0;
+//int pageNumPrev = 0;
 
 //***********************************************************************
 // Page Hello de démarrage
@@ -93,7 +94,7 @@ unsigned int posY = 50;
   tft.drawCentreString("lithium", margeX+logoWidth+margeX+50, 144, 4);
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   //tft.drawCentreString("IP: " + IP, 20+logoWidth+20+60, 94, 2); 
-  tft.drawString("version : 1.03", 0, 224, 2); //->240-16
+  tft.drawString("version : 1.04", 0, 224, 2); //->240-16
 
   tft.setTextColor(TFT_BLUE, TFT_BLACK);
   tft.setCursor(0, 95, 2);
@@ -168,6 +169,7 @@ float busvoltage = 0;
 float current_mA = 0;
 float loadvoltage = 0;
 //float TpsIntSec = 0; //Temps ecoulé depuis la dernière mesure
+//float TensionCalculee = 0;
 
   //TpsIntSec = (float)(currentMillis - MesuresMillis) / 1000;
   
@@ -206,25 +208,18 @@ float loadvoltage = 0;
   //Voies[voie-1].energy_mAh = Voies[voie-1].energy_mAh + Voies[voie-1].current_mA * (TpsIntSec / 3600);
   Voies[voie-1].energy_mAh = Voies[voie-1].energy_mAh + Voies[voie-1].current_mA / 36000;
   //----- Pourcentage de la capacité charge (Calcul du pourcentage de charge)
-	Voies[voie-1].ptCharge = niveauCB.getChargeLevel_18650( Voies[voie-1].loadvoltage );
+	if (current_mA >0) {
+    //TensionCalculee = Voies[i-1].loadvoltage*(current_mA*1000)
+    Voies[voie-1].ptCharge = niveauCB.getChargeLevel_18650( Voies[voie-1].busvoltage );
+  }
+  else {
+    Voies[voie-1].ptCharge = niveauCB.getChargeLevel_18650( Voies[voie-1].loadvoltage );
+  }
   //----- Temps total de charge
   //Voies[voie-1].Tps = Voies[voie-1].Tps + TpsIntSec;
   //if (Voies[voie-1].current_mA > 0) Voies[voie-1].Tps = Voies[voie-1].Tps + TpsIntSec;
   if (Voies[voie-1].current_mA > 0) Voies[voie-1].Tps = Voies[voie-1].Tps + 0.1;
-	
-	//----- Gestion de la charge en fonction de seuils
-  if (current_mA < 20 and buttonOK == false) {
-    digitalWrite(pinRelais[voie-1], HIGH);
-  }
-  else if (loadvoltage >= 3.0 and buttonOK == true) {
-    if (current_mA < 10 ) {
-      Voies[voie-1].energy_mAh = 0.0;
-      Voies[voie-1].Tps = 0.0;
-      Voies[voie-1].Tps = 0;
-    }
-    digitalWrite(pinRelais[voie-1], LOW);
-  }
-  
+	  
 }
 
 //***********************************************************************
@@ -237,45 +232,41 @@ void AfficheVoie(int voie) {
   tft.drawNumber(voie, 0, ligne[voie-1], 2);
   
   //Pas de batterie ou batterie HS
-  if (Voies[voie-1].loadvoltage<3.0) {
-    digitalWrite(pinRelais[voie-1], HIGH); // ouvrir le relais
+  if (Voies[voie-1].loadvoltage<2.9) {
     tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
     //tft.drawString("Pas de batterie ou batterie HS                   ", col1, ligne[voie-1], 2);
     tft.drawString("Batterie inexistante ou profondement dechargee   ", col1, ligne[voie-1], 2);
   }
   //Chargement batterie mise en page '8 par caratères', '6 pour le .'
   else {
-    //---- Baterie chargée
-    if (Voies[voie-1].loadvoltage>4.15 and Voies[voie-1].current_mA<2 and buttonOK == false) {
-       digitalWrite(pinRelais[voie-1], HIGH); // ouvrir le relais
-      //tft.setTextColor(TFT_GREEN, TFT_BLACK);
-      //tft.drawString("Batterie Ok                ", col1, ligne[voie-1], 2);
-      //tft.drawString("Batterie complete          ", col1, ligne[voie-1], 2);
-      //tft.drawString("Batterie Ok                                      ", col1, ligne[voie-1], 2);
-      //tft.drawString("Batterie complète                                ", col1, ligne[voie-1], 2);
-      //tft.drawFloat(Voies[voie-1].energy_mAh, 0, col4, ligne[voie-1], 2);
-      //tft.drawNumber(Voies[voie-1].energy_mAh, col4, ligne[voie-1], 2);
-      //tft.drawString("mAh",col4+45, ligne[voie-1], 2);
-    } 
 
     //Coloration du texte 
-    if (Voies[voie-1].loadvoltage>4.15 and Voies[voie-1].current_mA<10) {
-      //batterie chargée
-      tft.setTextColor(TFT_GREEN, TFT_BLACK);
+    if (Voies[voie-1].current_mA>0) {
+      //Batterie en charge
+      tft.setTextColor(TFT_RED, TFT_BLACK);
     }
     else {
-      if (Voies[voie-1].loadvoltage<2.9) {
+      if (Voies[voie-1].loadvoltage>4.05) {
+        //batterie chargée
+        tft.setTextColor(TFT_GREEN, TFT_BLACK);
+      }
+      else if (Voies[voie-1].loadvoltage<0.4) {
         //Pas de batterie ou problème batterie 
         tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
+        tft.drawString("Batterie inexistante ou profondement dechargee   ", col1, ligne[voie-1], 2);
+      }
+      else if (Voies[voie-1].loadvoltage<3.4) {
+        //problème batterie
+        tft.setTextColor(TFT_ORANGE, TFT_BLACK);
       }
       else {
-        //Batterie en chatge
-        tft.setTextColor(TFT_RED, TFT_BLACK);
+        //Batterie non en chatge
+        tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
       }
     }
 
     tft.drawString("                                                   ", col1, ligne[voie-1], 2);
-    //loadvoltage
+    //---- loadvoltage
     tft.drawFloat(Voies[voie-1].loadvoltage, 2, col1, ligne[voie-1], 2);
     tft.drawChar('V', col1+30, ligne[voie-1], 2);
     //---- current_mA
@@ -291,7 +282,13 @@ void AfficheVoie(int voie) {
     //tft.drawNumber(Voies[voie-1].power_mW, col3, ligne[voie-1], 2);
     //tft.drawString("mW",col3+32, ligne[voie-1], 2);
     //---- pourcentage %
-    tft.drawNumber(Voies[voie-1].ptCharge, col3, ligne[voie-1], 2);
+    if (Voies[voie-1].current_mA>0) {
+      //en charge
+      tft.drawString("xxx",col3, ligne[voie-1], 2);
+    }
+    else {
+      tft.drawNumber(Voies[voie-1].ptCharge, col3, ligne[voie-1], 2);  
+    }
     tft.drawString("%",col3+24, ligne[voie-1], 2);
     //---- energy_mAh
     tft.setTextColor(TFT_BLUE, TFT_BLACK);
@@ -305,6 +302,9 @@ void AfficheVoie(int voie) {
     tft.drawNumber(Voies[voie-1].Tps/60, col5, ligne[voie-1], 2);
     tft.drawString("min",col5+40, ligne[voie-1], 2);
 
+    //---- busvoltage
+    //tft.drawFloat(Voies[voie-1].busvoltage, 2, col5, ligne[voie-1], 2);
+    //tft.drawString("V",col5+40, ligne[voie-1], 2);
   }
   
 }
@@ -349,88 +349,62 @@ void AfficheMesures(void) {
 }
 
 //***********************************************************************
-// Affichage la jauge d'une voie
-//***********************************************************************
-void AfficheJauge(int voie) {
-
-}
-
-//***********************************************************************
-// Affichage les jauges sur une page
-//***********************************************************************
-void AfficheJauges(void) {
-  
-  //Affichage des mesures des voies
-  for (int i = 1; i <= 8; i++) AfficheJauge(i);
-
-}
-
-//***********************************************************************
 // Main loop
 //***********************************************************************
 void loop() {
 
-  //Prendre les mesures des voies
-  currentMillis = millis();
-  
-  if (currentMillis - MesuresMillis >= 100) {
-    //Interval = ((float)currentMillis - (float)MesuresMillis)/1000;
-    //Serial.print("interval: "); Serial.println(Interval);
-    for (int i = 1; i <= 8; i++) PrendreMesures(i);
-    MesuresMillis = currentMillis;
-  } 
-  
-  //Affichage des pages
-  if (currentMillis - AffichageMillis >= 1600) {
-    AffichageMillis = currentMillis;
-    switch (pageNum) {
-      case 0:
-        if (pageNumPrev != pageNum) { 
-          pageNumPrev = pageNum;
-          tft.fillScreen(TFT_BLACK);
-        }
-        AfficheMesures();
-        //AfficheJauges();
-        break;
-      case 1:
-        //Afficher une fois donc pas de rafraichissement
-        if (pageNumPrev != pageNum) {
-          pageNumPrev = pageNum;
-          HelloWorld(); //Affiche page démarrage
-        }
-        break;
-      /*case 2:
-        if (pageNumPrev != pageNum) {
-          pageNumPrev = pageNum; }
-          analogMeter(); // Draw analogue Meter
-        }
-        plotNeedle(443,0); // trace l'aiguille
-        //plotNeedle(Voies[0].current_mA,0); // trace l'aiguille
-        //Serial.println(millis()-t); // Print time taken for meter update
-        break;*/
-      /*case 3:
-        if (pageNumPrev != pageNum) {
-          pageNumPrev = pageNum;
-          //plotPointer(); // Draw Linear Meter
-        }
-        break;*/
-    }    
-  }
-  
   //Etat du bouton
   if (digitalRead(pinBouton)==LOW) {
     buttonOK = true;
-    //tft.drawString("ON  ", 0, 224, 2); //->240-16
-		pageNum = 1; //HelloWorld();
+    etat_bouton = 0;
+    if (etat_bouton==0) {
+      etat_bouton = 1;
+      tft.drawString("ON", 300, 224, 2); //->240-16 | 320-5x4
+      //pageNum = 1; //HelloWorld();
+    }
   }
   else if (buttonOK == true){
     buttonOK = false;
-		pageNum = 0; 
-    //tft.drawString("OFF ", 0, 224, 2); //->240-16
+    etat_bouton = 0;
+    tft.drawString("   ", 300, 224, 2); //->240-16
+    //pageNum = 0; 
     // Changement de page
     //pageNum = pageNum + 1;
     //if (pageNum > 2) pageNum = 0;
     ////tft.fillScreen(TFT_BLACK);
   }
 
+  //Prendre les mesures des voies
+  currentMillis = millis();
+  
+  if (currentMillis - MesuresMillis >= 100) {
+    MesuresMillis = currentMillis;
+    for (int i = 1; i <= 8; i++) {
+      PrendreMesures(i);
+      //----- Gestion de la charge en fonction de seuils
+      if (buttonOK == false) {
+        //---- Baterie chargée
+        if ((Voies[i-1].current_mA < 5) or (Voies[i-1].loadvoltage<2.9)) {
+          digitalWrite(pinRelais[i-1], HIGH); // ouvrir le relais
+        }
+      }
+      else {
+        if (Voies[i-1].loadvoltage >= 2.9) {
+          if (Voies[i-1].current_mA < 5) {
+            Voies[i-1].energy_mAh = 0.0;
+            Voies[i-1].Tps = 0.0;
+            Voies[i-1].Tps = 0;
+          }
+          digitalWrite(pinRelais[i-1], LOW);
+        }
+      }
+    } //for
+  } 
+  
+  //Affichage des pages
+  if (currentMillis - AffichageMillis >= 1600) {
+    AffichageMillis = currentMillis;
+    AfficheMesures();
+  }
+    
 }
