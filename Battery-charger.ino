@@ -3,7 +3,7 @@
 * 
 *  Auteur : Eric HANACEK
 *     2021-11-18
-*     Modification: 2022-03-16
+*     Modification: 2022-10-26
 *     
 * Microcontroleur : ESP32_Devkitc_V4
 * Ecran : TFT ILI9341, 240x320
@@ -94,7 +94,7 @@ unsigned int posY = 50;
   tft.drawCentreString("lithium", margeX+logoWidth+margeX+50, 144, 4);
   tft.setTextColor(TFT_YELLOW, TFT_BLACK);
   //tft.drawCentreString("IP: " + IP, 20+logoWidth+20+60, 94, 2); 
-  tft.drawString("version : 1.04", 0, 224, 2); //->240-16
+  tft.drawString("version : 1.05", 0, 224, 2); //->240-16
 
   tft.setTextColor(TFT_BLUE, TFT_BLACK);
   tft.setCursor(0, 95, 2);
@@ -246,7 +246,8 @@ void AfficheVoie(int voie) {
       tft.setTextColor(TFT_RED, TFT_BLACK);
     }
     else {
-      if (Voies[voie-1].loadvoltage>4.05) {
+      //if (Voies[voie-1].loadvoltage>4.05) {
+      if (niveauCB.getChargeLevel_18650( Voies[voie-1].busvoltage ) > 80) {
         //batterie chargée
         tft.setTextColor(TFT_GREEN, TFT_BLACK);
       }
@@ -255,12 +256,13 @@ void AfficheVoie(int voie) {
         tft.setTextColor(TFT_DARKGREY, TFT_BLACK);
         tft.drawString("Batterie inexistante ou profondement dechargee   ", col1, ligne[voie-1], 2);
       }
-      else if (Voies[voie-1].loadvoltage<3.4) {
+      //else if (Voies[voie-1].loadvoltage<3.4) {
+      else if (niveauCB.getChargeLevel_18650( Voies[voie-1].busvoltage ) < 20) {
         //problème batterie
         tft.setTextColor(TFT_ORANGE, TFT_BLACK);
       }
       else {
-        //Batterie non en chatge
+        //Batterie non en charge
         tft.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
       }
     }
